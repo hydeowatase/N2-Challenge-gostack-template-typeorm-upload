@@ -4,15 +4,13 @@ import Transaction from '../models/Transaction';
 import TransactionRepository from '../repositories/TransactionsRepository';
 import CreateCategoryService from './CreateCategoryService';
 
-// import AppError from '../errors/AppError';
-
-const categoryService = new CreateCategoryService();
+import AppError from '../errors/AppError';
 
 interface Request {
   title: string;
   value: number;
   type: 'income' | 'outcome';
-  category_title: string;
+  category: string;
 }
 
 class CreateTransactionService {
@@ -20,17 +18,27 @@ class CreateTransactionService {
     title,
     value,
     type,
-    category_title,
+    category,
   }: Request): Promise<Transaction> {
-    const category = await categoryService.execute({ title: category_title });
+    if (!['income', 'outcome'].includes(type))
+      throw new AppError('Tipo da transação inválida!');
 
     const transactionsRepository = getCustomRepository(TransactionRepository);
+
+    const balance = await transactionsRepository.getBalance();
+
+    if (type === 'outcome' && balance.total < value)
+      throw new AppError('Saldo insuficiente!');
+
+    const categoryService = new CreateCategoryService();
+
+    const categoryN = await categoryService.execute({ title: category });
 
     const transaction = transactionsRepository.create({
       title,
       value,
       type,
-      category_id: category.id,
+      category_id: categoryN.id,
     });
 
     await transactionsRepository.save(transaction);
